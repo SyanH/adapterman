@@ -1,5 +1,5 @@
 {
-    "name": "joanhey/adapterman",
+    "name": "mzsongyan/adapterman",
     "type": "library",
     "keywords": [
         "workerman",
@@ -8,18 +8,6 @@
     ],
     "license": "MIT",
     "description": "Use any framework and application with Workerman.",
-    "authors": [
-        {
-            "name": "Joanhey",
-            "email": "joanhey@kumbiaphp.com",
-            "homepage": "https://kumbiaphp.com",
-            "role": "Developer"
-        }
-    ],
-    "support": {
-        "issues": "https://github.com/joanhey/adapterman/issues",
-        "source": "https://github.com/joanhey/adapterman"
-    },
     "require": {
         "php": "^8",
         "workerman/workerman": "^4.1"
