@@ -3,8 +3,6 @@
 namespace Adapterman;
 
 use Workerman\Connection\TcpConnection;
-use Workerman\Protocols\Websocket;
-use Workerman\Timer;
 use Workerman\Worker;
 
 /**
@@ -23,78 +21,6 @@ class Http
      * @var array
      */
     public static array $headers = [];
-
-    /**
-     * Cookies.
-     * @var array
-     */
-    public static array $cookies = [];
-
-    /**
-     * Session save path.
-     * @var string
-     */
-    public static string $sessionSavePath = '';
-
-    /**
-     * Session name.
-     * @var string
-     */
-    public static string $sessionName = '';
-
-    /**
-     * Session gc max lifetime.
-     * @var int
-     */
-    public static int $sessionGcMaxLifeTime = 1440;
-
-    /**
-     * Session cookie lifetime.
-     * @var int
-     */
-    public static int $sessionCookieLifetime;
-
-    /**
-     * Session cookie path.
-     * @var string
-     */
-    public static string $sessionCookiePath;
-
-    /**
-     * Session cookie domain.
-     * @var string
-     */
-    public static string $sessionCookieDomain;
-
-    /**
-     * Session cookie secure.
-     * @var bool
-     */
-    public static bool $sessionCookieSecure;
-
-    /**
-     * Session cookie httponly.
-     * @var bool
-     */
-    public static bool $sessionCookieHttponly;
-
-    /**
-     * Session gc interval.
-     * @var int
-     */
-    public static int $sessionGcInterval = 600;
-
-    /**
-     * Session started.
-     * @var bool
-     */
-    protected static bool $sessionStarted = false;
-
-    /**
-     * Session file.
-     * @var string
-     */
-    protected static string $sessionFile = '';
 
     /**
      * Cache.
@@ -184,36 +110,6 @@ class Http
      */
     public static function init()
     {
-        if (!static::$sessionName) {
-            static::$sessionName = \ini_get('session.name');
-        }
-
-        if (!static::$sessionSavePath) {
-            $savePath = ini_get('session.save_path');
-            if (preg_match('/^\d+;(.*)$/', $savePath, $match)) {
-                $savePath = $match[1];
-            }
-            if (!$savePath || str_starts_with($savePath, 'tcp://')) {
-                $savePath = \sys_get_temp_dir();
-            }
-            static::$sessionSavePath = $savePath;
-        }
-
-        if ($gc_max_life_time = \ini_get('session.gc_maxlifetime')) {
-            static::$sessionGcMaxLifeTime = $gc_max_life_time;
-        }
-
-        static::$sessionCookieLifetime = (int)\ini_get('session.cookie_lifetime');
-        static::$sessionCookiePath = (string)\ini_get('session.cookie_path');
-        static::$sessionCookieDomain = (string)\ini_get('session.cookie_domain');
-        static::$sessionCookieSecure = (bool)\ini_get('session.cookie_secure');
-        static::$sessionCookieHttponly = (bool)\ini_get('session.cookie_httponly');
-
-        if (class_exists(Timer::class)) {
-            Timer::add(static::$sessionGcInterval, function () {
-                static::tryGcSessions();
-            });
-        }
     }
 
     /**
@@ -227,9 +123,6 @@ class Http
             'Content-Type' => 'Content-Type: text/html;charset=utf-8',
             'Server' => 'Server: workerman'
         ];
-        static::$cookies = [];
-        static::$sessionFile = '';
-        static::$sessionStarted = false;
     }
 
     /**
@@ -264,11 +157,7 @@ class Http
             static::responseCode($http_response_code);
         }
 
-        if ($key === 'Set-Cookie') {
-            static::$cookies[] = $content;
-        } else {
-            static::$headers[$key] = $content;
-        }
+        static::$headers[$key] = $content;
 
         return true;
     }
@@ -295,183 +184,6 @@ class Http
             return $code;
         }
         return false;
-    }
-
-    /**
-     * Set cookie.
-     * @param string $name
-     * @param string $value
-     * @param integer $maxage
-     * @param string $path
-     * @param string $domain
-     * @param bool $secure
-     * @param bool $HTTPOnly
-     * @return bool
-     */
-    public static function setCookie(
-        string $name,
-        string $value = '',
-        int    $maxage = 0,
-        string $path = '',
-        string $domain = '',
-        bool   $secure = false,
-        bool $HTTPOnly = false
-    ): bool
-    {
-        static::$cookies[] = 'Set-Cookie: ' . $name . '=' . rawurlencode($value)
-            . ($domain ?: '; Domain=' . $domain)
-            . (($maxage === 0) ? '' : '; Max-Age=' . $maxage)
-            . ($path ?: '; Path=' . $path)
-            . (!$secure ? '' : '; Secure')
-            . (!$HTTPOnly ? '' : '; HttpOnly');
-
-        return true;
-    }
-
-    /**
-     * Session create id.
-     * @return string
-     */
-    public static function sessionCreateId(): string
-    {
-        \mt_srand();
-        return bin2hex(\pack('d', \microtime(true)) . \pack('N', \mt_rand(0, 2147483647)));
-    }
-
-    /**
-     * Get and/or set the current session id.
-     * @param string|null $id
-     * @return string|null
-     */
-    public static function sessionId(string $id = null): string
-    {
-        if (static::sessionStarted() && static::$sessionFile) {
-            return \str_replace('ses_', '', \basename(static::$sessionFile));
-        }
-        return '';
-    }
-
-    /**
-     * Get and/or set the current session name.
-     * @param string|null $name
-     * @return string
-     */
-    public static function sessionName(string $name = null): string
-    {
-        $session_name = static::$sessionName;
-        if ($name && !static::sessionStarted()) {
-            static::$sessionName = $name;
-        }
-        return $session_name;
-    }
-
-    /**
-     * Get and/or set the current session save path.
-     * @param string|null $path
-     * @return string
-     */
-    public static function sessionSavePath(string $path = null): string
-    {
-        if ($path && \is_dir($path) && \is_writable($path) && !static::sessionStarted()) {
-            static::$sessionSavePath = $path;
-        }
-        return static::$sessionSavePath;
-    }
-
-    /**
-     * Session started.
-     * @return bool
-     */
-    public static function sessionStarted(): bool
-    {
-        return static::$sessionStarted;
-    }
-
-    /**
-     * Session start.
-     * @return bool
-     */
-    public static function sessionStart(): bool
-    {
-        if (static::$sessionStarted) {
-            return true;
-        }
-        static::$sessionStarted = true;
-        // Generate a SID.
-        if (!isset($_COOKIE[static::$sessionName]) || !\is_file(static::$sessionSavePath . '/ses_' . $_COOKIE[static::$sessionName])) {
-            // Create a unique session_id and the associated file name.
-            while (true) {
-                $session_id = static::sessionCreateId();
-                if (!\is_file($file_name = static::$sessionSavePath . '/ses_' . $session_id)) break;
-            }
-            static::$sessionFile = $file_name;
-            return static::setcookie(
-                static::$sessionName
-                , $session_id
-                , static::$sessionCookieLifetime
-                , static::$sessionCookiePath
-                , static::$sessionCookieDomain
-                , static::$sessionCookieSecure
-                , static::$sessionCookieHttponly
-            );
-        }
-        if (!static::$sessionFile) {
-            static::$sessionFile = static::$sessionSavePath . '/ses_' . $_COOKIE[static::$sessionName];
-        }
-        // Read session from session file.
-        if (static::$sessionFile) {
-            $raw = \file_get_contents(static::$sessionFile);
-            if ($raw) {
-                $_SESSION = \unserialize($raw);
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Save session.
-     * @return bool
-     */
-    public static function sessionWriteClose(): bool
-    {
-        if (static::$sessionStarted) {
-            $session_str = \serialize($_SESSION);
-            if ($session_str && static::$sessionFile) {
-                return (bool)\file_put_contents(static::$sessionFile, $session_str);
-            }
-        }
-        return empty($_SESSION);
-    }
-
-    /**
-     * Update the current session id with a newly generated one.
-     * @param bool $delete_old_session
-     * @return bool
-     * @link https://www.php.net/manual/en/function.session-regenerate-id.php
-     */
-    public static function sessionRegenerateId(bool $delete_old_session = false): bool
-    {
-        $old_session_file = static::$sessionFile;
-        // Create a unique session_id and the associated file name.
-        while (true) {
-            $session_id = static::sessionCreateId();
-            if (!\is_file($file_name = static::$sessionSavePath . '/ses_' . $session_id)) break;
-        }
-        static::$sessionFile = $file_name;
-
-        if ($delete_old_session) {
-            \unlink($old_session_file);
-        }
-
-        return static::setcookie(
-            static::$sessionName
-            , $session_id
-            , static::$sessionCookieLifetime
-            , static::$sessionCookiePath
-            , static::$sessionCookieDomain
-            , static::$sessionCookieSecure
-            , static::$sessionCookieHttponly
-        );
     }
 
     /**
@@ -521,20 +233,6 @@ class Http
                         $_FILES[$key]['file_type'] = \trim($header_value);
                         break;
                 }
-            }
-        }
-    }
-
-    /**
-     * Try GC sessions.
-     * @return void
-     */
-    public static function tryGcSessions()
-    {
-        $time_now = \time();
-        foreach (glob(static::$sessionSavePath . '/ses*') as $file) {
-            if (\is_file($file) && $time_now - \filemtime($file) > static::$sessionGcMaxLifeTime) {
-                \unlink($file);
             }
         }
     }
@@ -603,13 +301,12 @@ class Http
             $_SERVER = $cache['server'];
             $_POST = $cache['post'];
             $_GET = $cache['get'];
-            $_COOKIE = $cache['cookie'];
             $_REQUEST = $cache['request'];
             $GLOBALS['HTTP_RAW_POST_DATA'] = $GLOBALS['HTTP_RAW_REQUEST_DATA'] = '';
             return static::$cache[$recv_buffer]['decode'];
         }
         // Init.
-        $_POST = $_GET = $_COOKIE = $_REQUEST = $_SESSION = $_FILES = [];
+        $_POST = $_GET = $_REQUEST = $_FILES = [];
         // $_SERVER
         $_SERVER = [
             'REQUEST_METHOD' => '',
@@ -655,10 +352,6 @@ class Http
                     if (isset($tmp[1])) {
                         $_SERVER['SERVER_PORT'] = $tmp[1];
                     }
-                    break;
-                // cookie
-                case 'COOKIE':
-                    \parse_str(\str_replace('; ', '&', $_SERVER['HTTP_COOKIE']), $_COOKIE);
                     break;
                 // content-type
                 case 'CONTENT_TYPE':
@@ -731,7 +424,6 @@ class Http
         $ret = [
             'get' => $_GET,
             'post' => $_POST,
-            'cookie' => $_COOKIE,
             'server' => $_SERVER,
             'files' => $_FILES,
             'request' => $_REQUEST
@@ -759,11 +451,6 @@ class Http
         // http-code status line.
         $header = static::$status . "\r\n";
 
-        // Cookie headers
-        if (static::$cookies) {
-            $header .= \implode("\r\n", static::$cookies) . "\r\n";
-        }
-
         // other headers
         if (static::$headers) {
             $header .= \implode("\r\n", static::$headers) . "\r\n";
@@ -775,9 +462,6 @@ class Http
         }
         // header
         $header .= 'Content-Length: ' . \strlen($content) . "\r\n\r\n";
-
-        // save session
-        static::sessionWriteClose();
 
         // the whole http package
         return $header . $content;

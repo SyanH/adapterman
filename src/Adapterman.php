@@ -6,11 +6,11 @@ use Exception;
 
 class Adapterman
 {
-    public const VERSION = "0.5.5";
+    public const VERSION = "1.1";
 
     public const NAME = "Adapterman v". self::VERSION;
 
-    private const FUNCTIONS = ['header', 'header_remove', 'headers_sent', 'http_response_code', 'setcookie', 'session_create_id', 'session_id', 'session_name', 'session_save_path', 'session_status', 'session_start', 'session_write_close', 'session_regenerate_id', 'set_time_limit'];
+    private const FUNCTIONS = ['header', 'header_remove', 'headers_sent', 'http_response_code', 'set_time_limit'];
 
     public static function init(): void
     {
@@ -20,7 +20,7 @@ class Adapterman
 
             // OK initialize the functions
             require __DIR__ . '/AdapterFunctions.php';
-            class_alias(Http::class, \Protocols\Http::class);
+            class_alias(Http::class, \Workerman\Protocols\Http::class);
             Http::init();
 
         } catch (Exception $e) {
